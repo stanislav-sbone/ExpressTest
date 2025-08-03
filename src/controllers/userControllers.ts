@@ -1,62 +1,51 @@
 import { Request, Response } from "express";
 import { users } from "../data";
+import pool from "../db";
 
-export const getUsers = (req: Request, res: Response) => {
-  res.json(users);
-};
+export const getUsers = async (req: Request, res: Response) => {
+  const users = await pool.query("SELECT * FROM users")
+  res.json(users.rows)
+}
 
-export const getUsersById = (req: Request, res: Response) => {
+export const getUserById = async (req: Request, res: Response) => {
   const userID = parseInt(req.params.id, 10);
-  const user = users.find((user) => user.id === userID);
+  const user = await pool.query("select * from users where id = $1", [userID])
 
-  if (!user) {
-    res.status(404).json({ message: "User Not Found" });
-  }
-
-  res.json(user);
-};
-
-export const createUser = (req: Request, res: Response) => {
-  const { name, username, email } = req.body;
-  const newUser = {
-    id: Date.now(),
-    name,
-    username,
-    email,
-  };
-  users.push(newUser);
-  res.json({ message: "Пользователь создан" });
-};
-
-export const changeUser = (req: Request, res: Response) => {
-  const userID = parseInt(req.params.id, 10);
-  const index = users.findIndex((user) => user.id === userID);
-
-  if (index === -1) {
+  if (!user.rows[0]) {
     res.status(404).json({ message: "Пользователь не найден" });
-    return;
+  }
+
+  res.json(user.rows[0]);
+}
+
+export const createUser = async (req: Request, res: Response) => {
+  const { name, username, email } = req.body;
+  const newUser = await pool.query('INSERT INTO users (name, username, email) values ($1, $2, $3) RETURNING *', [name, username, email])
+  res.json(newUser.rows[0])
+}
+
+export const updateUser = async (req: Request, res: Response) => {
+  const userID = parseInt(req.params.id, 10);
+  const user = await pool.query("select * from users where id = $1", [userID])
+
+  if (!user.rows[0]) {
+    return res.status(404).json({ message: "Пользователь не найден" });
   }
 
   const { name, username, email } = req.body;
-  const newData = {
-    ...users[index],
-    name,
-    username,
-    email,
-  };
-  users[index] = newData;
+  await pool.query("UPDATE users set name = $1, username = $2, email = $3 where id = $4 RETURNING *", [name, username, email, userID])
+
   res.json({ message: "Данные пользователя изменены" });
 };
 
-export const removeUser = (req: Request, res: Response) => {
+export const removeUser = async (req: Request, res: Response) => {
   const userID = parseInt(req.params.id, 10);
-  const index = users.findIndex((user) => user.id === userID);
+  const user = await pool.query("select * from users where id = $1", [userID])
 
-  if (index === -1) {
-    res.status(404).json({ message: "Пользователь не найден" });
-    return;
+  if (!user.rows[0]) {
+    return res.status(404).json({ message: "Пользователь не найден" });
   }
 
-  res.json({ message: `Пользователь ${users[index].name} удален` });
-  users.splice(index, 1);
+  await pool.query("DELETE FROM users where id = $1", [userID])
+  res.json({ message: `Пользователь удален` });
 };
